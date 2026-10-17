@@ -140,6 +140,11 @@ def run(spec):
             return sum(o["qty"] for o in rs)
         if measure == "aov":
             return money(sum((o["usd"] for o in rs), Decimal(0)) / len(rs), out_cur) if rs else 0
+        if measure == "avg_units":
+            return round(sum(o["qty"] for o in rs) / len(rs), 2) if rs else 0
+        if measure == "per_customer":
+            n = len({o["customer"] for o in rs})
+            return money(sum((o["usd"] for o in rs), Decimal(0)) / n, out_cur) if n else 0
         if measure == "distinct_customers":
             return len({o["customer"] for o in rs})
         if measure == "distinct_products":
@@ -325,8 +330,18 @@ def parse(question):
         spec["status"] = "all"
 
     # ---- measure
+    money_words = r"(?:us |u\.s\. )?(?:dollars?|usd|euros?|eur|rupees?|inr|money|bucks)"
     how_many = bool(re.search(r"how many|number of|count of|\bcount\b|total number", t))
-    if re.search(r"average order|\baov\b|avg order|average (?:revenue|sale|sales|amount|spend|value) per order|mean order|average ticket|average basket|average (?:paid )?order", t):
+    if re.search(r"how (?:many|much) " + money_words, t):
+        how_many = False  # "how many US dollars ..." asks for an amount, not a count
+    avg_word = re.search(r"\b(average|avg|mean|typical|on average)\b", t)
+    units_word = re.search(r"\b(units?|quantit\w*|items?|pieces|qty)\b", t)
+    per_cust = re.search(r"per customer|for each customer|per buyer|per client", t) and not re.search(r"which customer|top customer|what customer", t)
+    if avg_word and units_word:
+        spec["measure"] = "avg_units"
+    elif per_cust:
+        spec["measure"] = "per_customer"
+    elif avg_word or re.search(r"\baov\b|average order|avg order|mean order|(?:order|sale|purchase|transaction)s? (?:is |are )?worth|order value|order size|per order|each order|ticket size|basket", t):
         spec["measure"] = "aov"
     elif re.search(r"(?:unique|distinct|different) customers|(?:how many|number of|count of) (?:\w+ )?customers", t) and not re.search(r"which customer|what customer|top customer", t):
         spec["measure"] = "distinct_customers"
@@ -364,7 +379,7 @@ def parse(question):
                 spec["extremum"] = "min"
         if re.search(r"best selling|top selling|most sold|most popular", t) and spec["measure"] == "amount":
             spec["measure"] = "units"
-    elif by_m:
+    elif by_m and not (spec["measure"] == "per_customer" and by_m.group(1) == "customer"):
         ent = by_m.group(1)
         spec["group_by"] = ent
     if ent:  # the thing being ranked/grouped must not also act as a filter on itself
