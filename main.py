@@ -377,8 +377,9 @@ def parse(question):
             spec["top_n"] = int(m.group(1)) if m.group(1).isdigit() else NUMW[m.group(1)]
             if re.search(r"\b(bottom|worst)\b", t):
                 spec["extremum"] = "min"
-        if re.search(r"best selling|top selling|most sold|most popular", t) and spec["measure"] == "amount":
-            spec["measure"] = "units"
+        explicit_money = re.search(r"revenue|\busd\b|dollars?|\bamount|income|earn|worth|money|\$|sales value|grossing|takings", t)
+        if re.search(r"best selling|top selling|most sold|most popular", t) and spec["measure"] == "amount" and not explicit_money:
+            spec["measure"] = "units"  # unqualified "best-selling" = most units; "by revenue/USD" stays money
     elif by_m and not (spec["measure"] == "per_customer" and by_m.group(1) == "customer"):
         ent = by_m.group(1)
         spec["group_by"] = ent
